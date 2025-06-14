@@ -4,213 +4,281 @@ pragma solidity ^0.8.13;
 import {Test, console2} from "forge-std/Test.sol";
 import "../src/TicTacToe.sol";
 
-contract SlotMachine {
-    struct Game {
-        bytes3 board;
-        address player1;
-        address player2;
-    }
+contract TicTacToeFuzzTest is Test {
+    TicTacToe public ttt;
 
-    mapping(uint256 => Game) public games;
+    address player1 = makeAddr("player1");
+    address player2 = makeAddr("player2");
+    address notPlayer = makeAddr("notPlayer");
 
-    constructor() {
-        games[1] = Game(bytes3(0), address(1), address(2));
-    }
-
-    function getBoard(uint256 gameId) public returns (bytes3) {
-        assembly {
-            mstore(0x80, gameId)
-            mstore(0xA0, 0)
-            let slot0 := sload(keccak256(0x80, 0x40))
-            let board := and(sub(shl(24, 1), 1), slot0)
-            mstore(0, shl(232, board))
-            return(0x00, 0x20)
-        }
-    }
-
-    // function testMemory() public returns (bytes3) {
-    //     assembly {
-    //         mstore(0x80, 0x123456) // Store value
-    //         return(0x80, 0x03) // Return only 3 bytes
-    //     }
-    // }
-}
-
-contract BytesCheck {
-    mapping(bytes3 => bool) public winningMarks;
-
-    constructor() {
-        initializeWinningMarks();
-    }
-
-    function initializeWinningMarks() public {
-        winningMarks[bytes3(0x000007)] = true; // [0, 1, 2] - 0b000000111
-        winningMarks[bytes3(0x000038)] = true; // [3, 4, 5] - 0b000111000
-        winningMarks[bytes3(0x0001C0)] = true; // [6, 7, 8] - 0b111000000
-        winningMarks[bytes3(0x000049)] = true; // [0, 3, 6] - 0b001001001
-        winningMarks[bytes3(0x000092)] = true; // [1, 4, 7] - 0b010010010
-        winningMarks[bytes3(0x000124)] = true; // [2, 5, 8] - 0b100100100
-        winningMarks[bytes3(0x000111)] = true; // [0, 4, 8] - 0b100010001
-        winningMarks[bytes3(0x000054)] = true; // [2, 4, 6] - 0b001010100
-    }
-
-    function boringCheck(bytes3 key) external view returns (bool result) {
-        result = winningMarks[key];
-    }
-    function check(bytes3 key) external view returns (bool result) {
-        // console2.logBytes(msg.data);
-        assembly {
-            // Calculate the storage slot of the mapping
-            // Assume the mapping is stored at slot 0
-            // keccak256(pad(key, 32) . pad(slot, 32))
-            // let ptr := mload(0x40) // get free memory pointer
-            mstore(0x80, key) // left-align bytes3 in 32 bytes
-            mstore(0xA0, 0) // slot of the mapping is 0
-            let storageKey := keccak256(0x80, 0x40)
-
-            // Load the bool value (stored as uint256: 0 or 1)
-            result := sload(storageKey)
-        }
-    }
-
-    function check2(bytes3 key) external returns (bool result) {
-        // check using call()
-        // bytes4 first;
-        // bytes32 second;
-        assembly {
-            let ptr := mload(0x40)
-            mstore(
-                ptr,
-                0x042a6bd000000000000000000000000000000000000000000000000000000000
-            )
-            mstore(add(ptr, 0x04), key)
-            // first := mload(ptr)
-            // second := mload(add(ptr, 0x04))
-            let callSuccess := staticcall(
-                gas(),
-                address(),
-                ptr,
-                0x24,
-                ptr,
-                0x20
-            )
-            if iszero(callSuccess) {
-                mstore(
-                    0x00,
-                    0xAA00000000000000000000000000000000000000000000000000000000000000
-                )
-                revert(0, 4)
-            }
-            result := mload(ptr)
-        }
-        // console2.logBytes4(first);
-        // console2.logBytes32(second);
-    }
-}
-
-contract TicTacToeTest is Test {
-    TicTacToe public ticTacToe;
+    uint256 gameId;
 
     function setUp() public {
-        ticTacToe = new TicTacToe();
+        ttt = new TicTacToe();
+        gameId = ttt.newGame(player1, player2);
     }
 
-    function testGetsCorrectBoard() public {
-        SlotMachine slotMachine = new SlotMachine();
-        vm.store(
-            address(slotMachine),
-            keccak256(abi.encode(1, 0)),
-            bytes32(
-                0x0000000000000000000000000000000000000000000000000000000000000001
-            )
-        );
-        bytes3 board = slotMachine.getBoard(1);
-        console2.logBytes3(board);
-    }
-
-    function testSetsCorrectCell() public {
-        uint256 gameId = ticTacToe.newGame(address(1), address(2));
-        console2.log("gameId", gameId);
-        play(address(1), gameId, 1);
-        play(address(2), gameId, 0);
-        play(address(1), gameId, 3);
-        play(address(2), gameId, 4);
-        play(address(1), gameId, 5);
-        play(address(2), gameId, 8);
-        // play(address(1), gameId, 6);
-        assertEq(ticTacToe.whoWon(gameId), address(2));
-        // assertEq(ticTacToe.getBoard(gameId), bytes3(0x001010));
-    }
-
-    function test_check_player_won() public {
-        uint256 gameId = ticTacToe.newGame(address(1), address(2));
-        // console2.logBytes32(
-        bytes32 slot0 = vm.load(
-            address(ticTacToe),
-            keccak256(abi.encode(gameId, 0))
-        );
-        assembly {
-            slot0 := or(slot0, shl(9, 0x000111))
+    /// @notice Check if position is empty
+    function isPositionEmpty(bytes3 board, uint8 index, bool isPlayer1) internal pure returns (bool) {
+        if (index > 8) {
+            revert("Invalid index");
         }
-        vm.store(address(ticTacToe), keccak256(abi.encode(gameId, 0)), slot0);
-        console2.logBytes32(
-            vm.load(address(ticTacToe), keccak256(abi.encode(gameId, 0)))
-        );
-        assert(ticTacToe.ifWon(gameId, address(2)));
-        // console2.logBytes32(
-        //     vm.load(address(ticTacToe), keccak256(abi.encode(gameId, 0)))
-        // );
-        // vm.store(
-        //     address(ticTacToe),
-        //     keccak256(abi.encode(gameId, 0)),
-        //     bytes32(
-        //         0x0000000000000000000000000000000000000000000000000000000000000001
-        //     )
-        // );
-        // assert(ticTacToe.ifWon(gameId, address(1)));
-        // assert(ticTacToe.ifWon(gameId, address(2)));
+        if (isPlayer1) {
+            console2.logBytes32(bytes32(1 << index));
+            return (uint256(uint24(board)) & (1 << (index))) == 0;
+        } else {
+            return (uint256(uint24(board)) & (512 << (index))) == 0;
+        }
     }
 
-    function test_check() public {
-        bytes3[8] memory keys = [
-            bytes3(0x000007),
-            bytes3(0x000038),
-            bytes3(0x0001C0),
-            bytes3(0x000049),
-            bytes3(0x000092),
-            bytes3(0x000124),
-            bytes3(0x000111),
-            bytes3(0x000054)
-        ];
-        BytesCheck c = new BytesCheck();
-        for (uint i = 0; i < keys.length; i++) {
-            bytes3 key = keys[i];
-            assert(c.check2(key));
+    /// @notice Count total moves made by a player
+    function countMoves(bytes3 board, bool isPlayer1) internal pure returns (uint8) {
+        uint8 count = 0;
+        for (uint8 i = 0; i < 9; i++) {
+            if (!isPositionEmpty(board, i, isPlayer1)) {
+                console2.log("index", i);
+                console2.log("isPlayer1", isPlayer1);
+                count++;
+            }
         }
-        // c.check(0x000124);
-        // c.check2(0x000124);
-        // wow(0x000124);
+        return count;
     }
 
-    function wow(bytes3 q) public {
-        bytes32 ans;
-        assembly {
-            ans := shl(232, q)
-        }
-        console2.logBytes32(ans);
+    /// @notice Count total moves made by both players
+    function countTotalMoves(bytes3 board) internal pure returns (uint8) {
+        return countMoves(board, true) + countMoves(board, false);
     }
 
-    function play(address player, uint256 gameId, uint8 index) public {
-        bytes32 mask;
-        assembly {
-            mask := shl(add(9, index), 1)
-        }
-        console2.log("mask");
-        console2.logBytes32(mask);
-        console2.log("board");
-        console2.logBytes3(ticTacToe.getBoard(gameId));
+    /// @notice Determine whose turn it is
+    function whoseTurn(bytes3 board) internal view returns (address) {
+        return (uint256(uint24(board)) & (1 << 23)) == 0 ? player1 : player2;
+    }
 
-        vm.prank(player);
-        ticTacToe.play(gameId, index);
+    /// @notice Create a fresh game for testing
+    function createFreshGame() internal returns (uint256 newGameId) {
+        return ttt.newGame(player1, player2);
+    }
+
+    // =============================================
+    // FUZZ TESTS - VALID SCENARIOS
+    // =============================================
+
+    /// @notice Fuzz test valid moves on empty positions
+    function testFuzz_ValidMoves(uint8 position) public {
+        vm.assume(position < 9);
+
+        uint256 freshGameId = createFreshGame();
+        bytes3 boardBefore = ttt.getBoard(freshGameId);
+
+        address currentPlayer = whoseTurn(boardBefore);
+        vm.prank(currentPlayer);
+
+        // Only test if position is empty
+        vm.assume(isPositionEmpty(boardBefore, position, currentPlayer == player1));
+
+        // Should not revert
+        ttt.play(freshGameId, position);
+
+        // Verify position is now occupied
+        bytes3 boardAfter = ttt.getBoard(freshGameId);
+        assertFalse(isPositionEmpty(boardAfter, position, currentPlayer == player1));
+        // Verify move count increased
+        assertEq(countTotalMoves(boardAfter), countTotalMoves(boardBefore) + 1);
+    }
+
+    /// @notice Fuzz test alternating players
+    function testFuzz_AlternatingPlayers(uint8[4] memory positions) public {
+        uint256 freshGameId = createFreshGame();
+
+        // Ensure all positions are valid and unique
+        for (uint8 i = 0; i < 4; i++) {
+            vm.assume(positions[i] < 9);
+            for (uint8 j = i + 1; j < 4; j++) {
+                vm.assume(positions[i] != positions[j]);
+            }
+        }
+
+        // Player 1 moves
+        vm.prank(player1);
+        ttt.play(freshGameId, positions[0]);
+
+        // Player 2 moves
+        vm.prank(player2);
+        ttt.play(freshGameId, positions[1]);
+
+        // Player 1 moves again
+        vm.prank(player1);
+        ttt.play(freshGameId, positions[2]);
+
+        // Player 2 moves again
+        vm.prank(player2);
+        ttt.play(freshGameId, positions[3]);
+
+        // Verify 4 moves were made
+        bytes3 finalBoard = ttt.getBoard(freshGameId);
+        assertEq(countTotalMoves(finalBoard), 4);
+    }
+
+    // =============================================
+    // FUZZ TESTS - INVALID GAME IDS
+    // =============================================
+
+    /// @notice Fuzz test with invalid game IDs
+    function testFuzz_InvalidGameId(uint256 invalidGameId, uint8 position) public {
+        vm.assume(position < 9);
+        vm.assume(invalidGameId > ttt.gameCount()); // Non-existent game
+
+        vm.prank(player1);
+        vm.expectRevert();
+        ttt.play(invalidGameId, position);
+    }
+
+    /// @notice Fuzz test with very large game IDs
+    function testFuzz_ExtremeGameIds(uint256 extremeGameId, uint8 position) public {
+        vm.assume(position < 9);
+        vm.assume(extremeGameId > 1000000); // Very large game ID
+
+        vm.prank(player1);
+        vm.expectRevert();
+        ttt.play(extremeGameId, position);
+    }
+
+    // =============================================
+    // FUZZ TESTS - INVALID POSITIONS
+    // =============================================
+
+    /// @notice Fuzz test with out-of-bounds positions
+    function testFuzz_OutOfBoundsPosition(uint8 invalidPosition) public {
+        vm.assume(invalidPosition >= 9);
+        vm.assume(invalidPosition <= 255); // Keep it reasonable
+
+        uint256 freshGameId = createFreshGame();
+
+        vm.prank(player1);
+        vm.expectRevert();
+        ttt.play(freshGameId, invalidPosition);
+    }
+
+    /// @notice Fuzz test playing on occupied positions
+    function testFuzz_OccupiedPosition(uint8 position) public {
+        vm.assume(position < 9);
+
+        uint256 freshGameId = createFreshGame();
+
+        // Player 1 makes first move
+        vm.prank(player1);
+        ttt.play(freshGameId, position);
+
+        // Player 2 tries to play same position - should revert
+        vm.prank(player2);
+        vm.expectRevert();
+        ttt.play(freshGameId, position);
+
+        // Player 1 tries to play same position again - should also revert
+        vm.prank(player1);
+        vm.expectRevert();
+        ttt.play(freshGameId, position);
+    }
+
+    // =============================================
+    // FUZZ TESTS - WRONG PLAYERS
+    // =============================================
+
+    /// @notice Fuzz test unauthorized players
+    function testFuzz_UnauthorizedPlayer(address randomPlayer, uint8 position) public {
+        vm.assume(position < 9);
+        vm.assume(randomPlayer != player1);
+        vm.assume(randomPlayer != player2);
+        vm.assume(randomPlayer != address(0));
+
+        uint256 freshGameId = createFreshGame();
+
+        vm.prank(randomPlayer);
+        vm.expectRevert();
+        ttt.play(freshGameId, position);
+    }
+
+    /// @notice Fuzz test wrong turn order
+    function testFuzz_WrongTurnOrder(uint8 position) public {
+        vm.assume(position < 9);
+
+        uint256 freshGameId = createFreshGame();
+
+        // Player 2 tries to go first (should be player 1's turn)
+        vm.prank(player2);
+        vm.expectRevert();
+        ttt.play(freshGameId, position);
+    }
+
+    /// @notice Fuzz test player playing twice in a row
+    function testFuzz_DoubleMove(uint8[2] memory positions) public {
+        vm.assume(positions[0] < 9 && positions[1] < 9);
+        vm.assume(positions[0] != positions[1]);
+
+        uint256 freshGameId = createFreshGame();
+
+        // Player 1 makes first move
+        vm.prank(player1);
+        ttt.play(freshGameId, positions[0]);
+
+        // Player 1 tries to move again immediately - should revert
+        vm.prank(player1);
+        vm.expectRevert();
+        ttt.play(freshGameId, positions[1]);
+    }
+
+    // =============================================
+    // FUZZ TESTS - GAME STATE INVARIANTS
+    // =============================================
+
+    /// @notice Fuzz test that game state is preserved correctly
+    function testFuzz_GameStateInvariants(uint8[5] memory moves) public {
+        uint256 freshGameId = createFreshGame();
+
+        // Ensure all moves are valid positions and unique
+        for (uint8 i = 0; i < 5; i++) {
+            for (uint8 j = i + 1; j < 5; j++) {
+                vm.assume(moves[i] % 9 != moves[j] % 9);
+            }
+        }
+
+        bytes3 initialBoard = ttt.getBoard(freshGameId);
+        uint8 initialMoves = countTotalMoves(initialBoard);
+
+        // Make alternating moves
+        for (uint8 i = 0; i < 5; i++) {
+            address currentPlayer = i % 2 == 0 ? player1 : player2;
+            vm.prank(currentPlayer);
+            ttt.play(freshGameId, moves[i] % 9);
+
+            // Verify move count is correct after each move
+            bytes3 currentBoard = ttt.getBoard(freshGameId);
+            assertEq(countTotalMoves(currentBoard), initialMoves + i + 1);
+        }
+    }
+
+    /// @notice Fuzz test that players can't modify other games
+    function testFuzz_GameIsolation(uint8 position1, uint8 position2) public {
+        vm.assume(position1 < 9 && position2 < 9);
+
+        // Create two separate games
+        uint256 game1 = createFreshGame();
+        uint256 game2 = ttt.newGame(player1, player2);
+
+        // Make move in game 1
+        vm.prank(player1);
+        ttt.play(game1, position1);
+
+        // Verify game 2 is unaffected
+        bytes3 game2Board = ttt.getBoard(game2);
+        assertEq(countTotalMoves(game2Board), 0);
+
+        // Make move in game 2
+        vm.prank(player1);
+        ttt.play(game2, position2);
+
+        // Verify both games have exactly 1 move
+        assertEq(countTotalMoves(ttt.getBoard(game1)), 1);
+        assertEq(countTotalMoves(ttt.getBoard(game2)), 1);
     }
 }

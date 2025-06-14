@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
+
 import {console2} from "forge-std/Test.sol";
 
 contract TicTacToe {
@@ -12,6 +13,7 @@ contract TicTacToe {
     mapping(uint256 => Game) public games;
     uint256 public gameCount;
     mapping(bytes3 => bool) public winningMarks;
+
     constructor() {
         gameCount = 0;
         initializeWinningMarks();
@@ -28,10 +30,7 @@ contract TicTacToe {
         winningMarks[bytes3(0x000054)] = true; // [2, 4, 6] - 0b001010100
     }
 
-    function newGame(
-        address player1,
-        address player2
-    ) public returns (uint256) {
+    function newGame(address player1, address player2) public returns (uint256) {
         require(player1 != player2, "Players must be different");
         gameCount++;
         games[gameCount] = Game(bytes3(0), player1, player2);
@@ -64,40 +63,28 @@ contract TicTacToe {
         }
     }
 
-    function ifWon(
-        uint256 gameId,
-        address player
-    ) public view returns (bool result) {
+    function ifWon(uint256 gameId, address player) public view returns (bool result) {
         assembly {
             let ptr := mload(0x40)
             mstore(ptr, gameId)
             mstore(add(ptr, 32), 0)
             let slot0 := sload(keccak256(ptr, 64))
             let board := and(sub(shl(24, 1), 1), slot0)
-            if eq(player, shr(24, slot0)) {
-                result := shl(232, and(511, board))
-            }
-            if eq(player, sload(add(keccak256(ptr, 0x40), 1))) {
-                result := shl(223, and(261632, board))
-            }
-            mstore(
-                add(ptr, 64),
-                0x042a6bd000000000000000000000000000000000000000000000000000000000
-            )
+            if eq(player, shr(24, slot0)) { result := shl(232, and(511, board)) }
+            if eq(player, sload(add(keccak256(ptr, 0x40), 1))) { result := shl(223, and(261632, board)) }
+            mstore(add(ptr, 64), 0x042a6bd000000000000000000000000000000000000000000000000000000000)
             mstore(add(ptr, 68), result)
-            let callSuccess := staticcall(
-                gas(), // Gas
-                address(), // Target contract
-                add(ptr, 64), // Value (0 for ERC20)
-                0x24,
-                add(ptr, 64),
-                0x20
-            )
-            if iszero(callSuccess) {
-                mstore(
-                    0x00,
-                    0xCC00000000000000000000000000000000000000000000000000000000000000
+            let callSuccess :=
+                staticcall(
+                    gas(), // Gas
+                    address(), // Target contract
+                    add(ptr, 64), // Value (0 for ERC20)
+                    0x24,
+                    add(ptr, 64),
+                    0x20
                 )
+            if iszero(callSuccess) {
+                mstore(0x00, 0xCC00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
             result := mload(add(ptr, 64))
@@ -112,62 +99,46 @@ contract TicTacToe {
             mstore(add(ptr, 32), 0)
             let slot0 := sload(keccak256(ptr, 64))
             let board := and(sub(shl(24, 1), 1), slot0)
-            mstore(
-                add(ptr, 64),
-                0x042a6bd000000000000000000000000000000000000000000000000000000000
-            )
+            mstore(add(ptr, 64), 0x042a6bd000000000000000000000000000000000000000000000000000000000)
             temp := shl(232, and(511, board))
             mstore(add(ptr, 68), shl(232, and(511, board)))
-            let callSuccess := staticcall(
-                gas(), // Gas
-                address(), // Target contract
-                add(ptr, 64), // Value (0 for ERC20)
-                0x24,
-                add(ptr, 64),
-                0x20
-            )
-            if iszero(callSuccess) {
-                mstore(
-                    0x00,
-                    0xCC00000000000000000000000000000000000000000000000000000000000000
+            let callSuccess :=
+                staticcall(
+                    gas(), // Gas
+                    address(), // Target contract
+                    add(ptr, 64), // Value (0 for ERC20)
+                    0x24,
+                    add(ptr, 64),
+                    0x20
                 )
+            if iszero(callSuccess) {
+                mstore(0x00, 0xCC00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
-            if mload(add(ptr, 64)) {
-                player := shr(24, slot0)
-            }
-            mstore(
-                add(ptr, 64),
-                0x042a6bd000000000000000000000000000000000000000000000000000000000
-            )
+            if mload(add(ptr, 64)) { player := shr(24, slot0) }
+            mstore(add(ptr, 64), 0x042a6bd000000000000000000000000000000000000000000000000000000000)
             mstore(add(ptr, 68), shl(223, and(261632, board)))
-            callSuccess := staticcall(
-                gas(), // Gas
-                address(), // Target contract
-                add(ptr, 64), // Value (0 for ERC20)
-                0x24,
-                add(ptr, 64),
-                0x20
-            )
-            if iszero(callSuccess) {
-                mstore(
-                    0x00,
-                    0xCC00000000000000000000000000000000000000000000000000000000000000
+            callSuccess :=
+                staticcall(
+                    gas(), // Gas
+                    address(), // Target contract
+                    add(ptr, 64), // Value (0 for ERC20)
+                    0x24,
+                    add(ptr, 64),
+                    0x20
                 )
+            if iszero(callSuccess) {
+                mstore(0x00, 0xCC00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
-            if mload(add(ptr, 64)) {
-                player := sload(add(keccak256(ptr, 0x40), 1))
-            }
+            if mload(add(ptr, 64)) { player := sload(add(keccak256(ptr, 0x40), 1)) }
         }
     }
+
     function play(uint256 gameId, uint8 index) public {
         assembly {
             if gt(index, 8) {
-                mstore(
-                    0x00,
-                    0x1100000000000000000000000000000000000000000000000000000000000000
-                )
+                mstore(0x00, 0x1100000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4) // if the player is not the one to play, revert
             }
             let ptr := mload(0x40)
@@ -180,61 +151,47 @@ contract TicTacToe {
             let playerBoard := 0
             switch iszero(and(shl(23, 1), board))
             case 0 {
-                // checking other player won
-                // not zero means player 1's turn
-                player := sload(add(keccak256(ptr, 0x40), 1))
-                mark := 1 // 1024 is player 1's mark, as 1024 is 10000000001 in binary ending with 1
-                playerBoard := shl(223, and(261632, board)) // 261632 in binary is 1 1111 1111 0 0000 0000
-                // mask := shl(add(9, index), 1) // adding 9 to the index, to check if the cell is already played
-            }
-            default {
                 // zero means player 0's turn
-                player := shr(24, slot0)
+                player := sload(add(keccak256(ptr, 0x40), 1))
                 mark := 512 // 1024 is player 0's mark, as 1024 is 10000000000 in binary ending with 0
                 playerBoard := shl(232, and(511, board)) // 261632 in binary is 1 1111 1111 0 0000 0000
-                // mask := shl(index, 1) // adding 9 to the index, to check if the cell is already played
+                    // mask := shl(index, 1) // adding 9 to the index, to check if the cell is already played
+            }
+            default {
+                // checking other player won
+                // not zero means player 1's turn
+                player := shr(24, slot0)
+                mark := 1 // 1024 is player 1's mark, as 1024 is 10000000001 in binary ending with 1
+                playerBoard := shl(223, and(261632, board)) // 261632 in binary is 1 1111 1111 0 0000 0000
+                    // mask := shl(add(9, index), 1) // adding 9 to the index, to check if the cell is already played
             }
             if iszero(eq(player, caller())) {
-                mstore(
-                    0x00,
-                    0xAA00000000000000000000000000000000000000000000000000000000000000
-                )
+                mstore(0x00, 0xAA00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4) // if the player is not the one to play, revert
             }
             if iszero(iszero(and(shl(index, 513), board))) {
                 // if the cell is already played, revert. already played cell would be 1
-                mstore(
-                    0x00,
-                    0xBB00000000000000000000000000000000000000000000000000000000000000
-                )
+                mstore(0x00, 0xBB00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
-            mstore(
-                add(ptr, 64),
-                0x042a6bd000000000000000000000000000000000000000000000000000000000
-            )
+            mstore(add(ptr, 64), 0x042a6bd000000000000000000000000000000000000000000000000000000000)
             mstore(add(ptr, 68), playerBoard)
-            let callSuccess := staticcall(
-                gas(), // Gas
-                address(), // Target contract
-                add(ptr, 64), // Value (0 for ERC20)
-                0x24,
-                add(ptr, 64),
-                0x20
-            )
-            if iszero(callSuccess) {
-                mstore(
-                    0x00,
-                    0xCC00000000000000000000000000000000000000000000000000000000000000
+            let callSuccess :=
+                staticcall(
+                    gas(), // Gas
+                    address(), // Target contract
+                    add(ptr, 64), // Value (0 for ERC20)
+                    0x24,
+                    add(ptr, 64),
+                    0x20
                 )
+            if iszero(callSuccess) {
+                mstore(0x00, 0xCC00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
             let result := mload(add(ptr, 64))
             if result {
-                mstore(
-                    0x00,
-                    0xDD00000000000000000000000000000000000000000000000000000000000000
-                )
+                mstore(0x00, 0xDD00000000000000000000000000000000000000000000000000000000000000)
                 revert(0, 4)
             }
             board := or(board, shl(index, mark)) // add the mark to the board
