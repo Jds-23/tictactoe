@@ -17,7 +17,7 @@ contract TicTacToe {
         initializeWinningMarks();
     }
 
-    function initializeWinningMarks() public {
+    function initializeWinningMarks() internal {
         winningMarks[bytes3(0x000007)] = true; // [0, 1, 2] - 0b000000111
         winningMarks[bytes3(0x000038)] = true; // [3, 4, 5] - 0b000111000
         winningMarks[bytes3(0x0001C0)] = true; // [6, 7, 8] - 0b111000000
