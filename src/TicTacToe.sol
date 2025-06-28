@@ -264,6 +264,8 @@ contract TicTacToe {
             board := xor(board, shl(23, 1)) // invert turn
             slot0 := or(and(not(sub(shl(24, 1), 1)), slot0), board) // update the board in the slot
             sstore(keccak256(ptr, 64), slot0) // update the storage
+            mstore(0x00, board)
+            log0(0x00, 0x20)
         }
     }
 }
