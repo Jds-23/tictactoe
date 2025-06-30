@@ -64,6 +64,10 @@ contract TicTacToeFuzzTest is Test {
     }
 
     /// @notice Get the board after a move without playing
+    /// @dev Assumes the same bit layout as TicTacToe.sol:
+    ///      - Player1 marks: bits 0–8 (1 << position)
+    ///      - Player2 marks: bits 9–17 (512 << position)
+    ///      - Turn bit: bit 23 (toggled via xor with 1 << 23)
     function getBoardAfterMove(uint256 gameId, uint8 position) internal returns (bytes3) {
         bytes3 board = ttt.getBoard(gameId);
         address currentPlayer = whoseTurn(board);

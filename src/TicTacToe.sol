@@ -95,8 +95,8 @@ contract TicTacToe {
             mstore(add(ptr, 32), 0)
             let slot0 := sload(keccak256(ptr, 64))
             let board := and(sub(shl(24, 1), 1), slot0)
-            if eq(player, shr(24, slot0)) { result := shl(232, and(511, board)) }
-            if eq(player, sload(add(keccak256(ptr, 0x40), 1))) { result := shl(223, and(261632, board)) }
+            if eq(player, shr(24, slot0)) { result := shl(232, and(511, board)) } // 511 = 0x1FF = bits 0-8 for player 1
+            if eq(player, sload(add(keccak256(ptr, 0x40), 1))) { result := shl(223, and(261632, board)) } // 261632 = 0x3FE00 = bits 9-17 for player 2
             mstore(add(ptr, 64), 0x042a6bd000000000000000000000000000000000000000000000000000000000)
             mstore(add(ptr, 68), result)
             let callSuccess :=
