@@ -13,6 +13,10 @@ contract TicTacToeFuzzTest is Test {
 
     uint256 gameId;
 
+    // Event definitions for testing
+    event NewGame(address indexed player1, address indexed player2, uint256 gameId);
+    event Played(uint256 indexed gameId, bytes3 board);
+
     function setUp() public {
         ttt = new TicTacToe();
         gameId = ttt.newGame(player1, player2);
@@ -57,6 +61,22 @@ contract TicTacToeFuzzTest is Test {
     /// @notice Create a fresh game for testing
     function createFreshGame() internal returns (uint256 newGameId) {
         return ttt.newGame(player1, player2);
+    }
+
+    /// @notice Get the board after a move without playing
+    /// @dev Assumes the same bit layout as TicTacToe.sol:
+    ///      - Player1 marks: bits 0–8 (1 << position)
+    ///      - Player2 marks: bits 9–17 (512 << position)
+    ///      - Turn bit: bit 23 (toggled via xor with 1 << 23)
+    function getBoardAfterMove(uint256 gameId, uint8 position) internal returns (bytes3) {
+        bytes3 board = ttt.getBoard(gameId);
+        address currentPlayer = whoseTurn(board);
+        if (currentPlayer == player1) {
+            board = bytes3(uint24((uint24(board) | (1 << position)) ^ (1 << 23)));
+        } else {
+            board = bytes3(uint24((uint24(board) | (512 << position)) ^ (1 << 23)));
+        }
+        return board;
     }
 
     // =============================================
@@ -280,5 +300,32 @@ contract TicTacToeFuzzTest is Test {
         // Verify both games have exactly 1 move
         assertEq(countTotalMoves(ttt.getBoard(game1)), 1);
         assertEq(countTotalMoves(ttt.getBoard(game2)), 1);
+    }
+
+    // =============================================
+    // FUZZ TESTS - EVENT LOGS
+    // =============================================
+
+    /// @notice Fuzz test event log for newGame
+    function testFuzz_EventLog_NewGame(address p1, address p2) public {
+        // Only test for valid, non-equal, non-zero addresses
+        vm.assume(p1 != address(0) && p2 != address(0) && p1 != p2);
+        vm.expectEmit(true, true, false, true, address(ttt));
+        emit NewGame(p1, p2, ttt.gameCount());
+        ttt.newGame(p1, p2);
+    }
+
+    /// @notice Fuzz test event log for play
+    function testFuzz_EventLog_Play(uint8 position) public {
+        vm.assume(position < 9);
+        uint256 freshGameId = createFreshGame();
+        bytes3 boardBefore = ttt.getBoard(freshGameId);
+        bytes3 boardAfter = getBoardAfterMove(freshGameId, position);
+        address currentPlayer = whoseTurn(boardBefore);
+        vm.assume(isPositionEmpty(boardBefore, position, currentPlayer == player1));
+        vm.prank(currentPlayer);
+        vm.expectEmit(true, true, false, true, address(ttt));
+        emit Played(freshGameId, boardAfter);
+        ttt.play(freshGameId, position);
     }
 }
